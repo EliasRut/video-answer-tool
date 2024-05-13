@@ -24,5 +24,7 @@ dist-ssr
 *.sw?
 
 /public/audio
+/public/images
+/public/videos
 
 .env

@@ -10,52 +10,6 @@
   border-radius: 10px;
 }
 
-.segment {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  border-radius: 10px;
-}
-
-.text {
-  position: absolute;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
-  color: #fff;
-  font-size: 1.2em;
-  font-weight: 500;
-  text-align: center;
-  padding: 16px;
-  border-radius: 10px;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 2;
-}
-
-.image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 10px;
-  animation: zoomIn 0.5s ease;
-  z-index: 1;
-}
-
-/* Zoom-In Animation */
-@keyframes zoomIn {
-  0% {
-    transform: scale(1);
-  }
-  100% {
-    transform: scale(1.1);
-  }
-}
-
-.imagePreloader {
-  display: none;
-}
-
 .questionInput {
   text-align: center;
   font-size: 1.2em;
@@ -65,4 +19,11 @@
 
 .getAnswerButton {
   margin-top: 16px;
+}
+
+.buttonWrapper {
+  height: 56px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
 }

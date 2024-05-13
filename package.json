@@ -9,7 +9,9 @@
     "build": "vite build"
   },
   "dependencies": {
+    "canvas2video": "^1.1.4",
     "express": "^4.18.2",
+    "fluent-ffmpeg": "^2.1.2",
     "groq-sdk": "^0.3.3",
     "html2plaintext": "^2.1.4",
     "mp3-duration": "^1.1.0",
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
+    "@types/fluent-ffmpeg": "^2.1.24",
     "@types/node": "^20.9.3",
     "@types/react": "^18.0.38",
     "@types/react-dom": "^18.2.16",

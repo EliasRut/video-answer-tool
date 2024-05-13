@@ -4,26 +4,11 @@ import styles from "./App.module.css";
 import { useEffect, useState } from "react";
 
 import { Answer } from "../shared/Answer";
+import { CanvasRenderer } from "./CanvasRenderer";
+import mockData from "./mockData";
+import { HtmlRenderer } from "./HtmlRenderer";
 
-const dummyAnswer = {
-  segments: [
-    "Donald Trump was the 45th President of the United States, serving from 2017 to 2021. He is a businessman, media personality, and politician who became known for his populist and nationalist policies.",
-    "Trump's importance lies in his unconventional political style, which fueled widespread controversy and protests throughout his presidency.",
-    "His presidency was marked by numerous controversies, tweets, and policies that had a significant impact on American politics and society, with many of his actions still influencing the country today.",
-  ],
-  imageUrls: [
-    "//upload.wikimedia.org/wikipedia/commons/thumb/5/56/Donald_Trump_official_portrait.jpg/220px-Donald_Trump_official_portrait.jpg",
-    "//upload.wikimedia.org/wikipedia/commons/thumb/9/90/Donald_Trump_speaking_at_CPAC_2011_by_Mark_Taylor.jpg/220px-Donald_Trump_speaking_at_CPAC_2011_by_Mark_Taylor.jpg",
-    "//upload.wikimedia.org/wikipedia/commons/thumb/d/d9/White_House_Press_Briefing_%2849666120807%29.jpg/220px-White_House_Press_Briefing_%2849666120807%29.jpg",
-  ],
-  speechFileUrls: [
-    "http://localhost:3000/public/audio/e0pyim2l90pbtg6bl0grun.mp3",
-    "http://localhost:3000/public/audio/47wtc3glzml0bt1wib6538i.mp3",
-    "http://localhost:3000/public/audio/otqbxe8s2t72frw13lp5cl.mp3",
-  ],
-  speechFileLengths: [5, 5, 5],
-};
-
+// This is needed to handle closure in startNewSegment
 let externalActiveSegment = 0;
 
 function App() {
@@ -31,24 +16,31 @@ function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [answer, setAnswer] = useState<Answer | undefined>(undefined);
   const [activeSegment, setActiveSegment] = useState<number>(0);
+  const [isUsingCanvasRenderer, setIsUsingCanvasRenderer] =
+    useState<boolean>(false);
+  const [hasFinished, setHasFinished] = useState<boolean>(false);
 
   const startNewSegment = () => {
-    const audio = new Audio(answer!.speechFileUrls[externalActiveSegment]);
+    const audio = new Audio(
+      answer!.segments[externalActiveSegment].speechFileUrl
+    );
     audio.onended = () => {
-      if (externalActiveSegment < answer!.speechFileUrls.length - 1) {
+      if (externalActiveSegment < answer!.segments.length - 1) {
         setActiveSegment((prev) => prev + 1);
         externalActiveSegment++;
         startNewSegment();
+      } else {
+        setHasFinished(true);
       }
     };
     audio.play();
   };
 
   useEffect(() => {
-    if (answer && !isLoading) {
+    if (answer && !isLoading && !isUsingCanvasRenderer) {
       startNewSegment();
     }
-  }, [answer, isLoading]);
+  }, [answer, isLoading, isUsingCanvasRenderer]);
 
   if (!isLoading && !answer) {
     return (
@@ -66,20 +58,83 @@ function App() {
               className={styles.getAnswerButton}
               onClick={async () => {
                 // setAnswer(dummyAnswer);
+                setIsUsingCanvasRenderer(false);
                 setIsLoading(true);
                 const response = await fetch("/question", {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
                   },
-                  body: JSON.stringify({ question }),
+                  body: JSON.stringify({ question, saveImagesLocally: true }),
                 });
                 const data = (await response.json()) as Answer;
                 setAnswer(data);
+                setIsLoading(false);
+
+                // Mock for prototyping
+                // const soundFileIds = mockData.segments.map(
+                //   (segment) =>
+                //     segment.speechFileUrl.split("/").pop()?.split(".")[0]
+                // );
+                // fetch("http://localhost:3000/video", {
+                //   method: "POST",
+                //   headers: {
+                //     "Content-Type": "application/json",
+                //   },
+                //   body: JSON.stringify({
+                //     videoId: "b2hyw3os1sc46m8lgqviso",
+                //     soundFileIds,
+                //   }),
+                // }).then((response) => {
+                //   console.log(response);
+                // });
+
+                // setAnswer(mockData);
                 // setIsLoading(false);
               }}
             >
-              Generate Answer
+              Generate Preview
+            </button>
+            <button
+              className={styles.getAnswerButton}
+              onClick={async () => {
+                // setAnswer(dummyAnswer);
+                setIsUsingCanvasRenderer(true);
+                setIsLoading(true);
+                const response = await fetch("/question", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ question, saveImagesLocally: true }),
+                });
+                const data = (await response.json()) as Answer;
+                setAnswer(data);
+                setIsLoading(false);
+
+                // Mock for prototyping
+                // const soundFileIds = mockData.segments.map(
+                //   (segment) =>
+                //     segment.speechFileUrl.split("/").pop()?.split(".")[0]
+                // );
+                // fetch("http://localhost:3000/video", {
+                //   method: "POST",
+                //   headers: {
+                //     "Content-Type": "application/json",
+                //   },
+                //   body: JSON.stringify({
+                //     videoId: "b2hyw3os1sc46m8lgqviso",
+                //     soundFileIds,
+                //   }),
+                // }).then((response) => {
+                //   console.log(response);
+                // });
+
+                // setAnswer(mockData);
+                // setIsLoading(false);
+              }}
+            >
+              Generate Video
             </button>
           </div>
         </div>
@@ -94,9 +149,9 @@ function App() {
         </div>
         {answer && (
           <div className={styles.imagePreloader}>
-            {answer.imageUrls.map((imageUrl, index) => (
+            {answer.segments.map((segment, index) => (
               <img
-                src={imageUrl}
+                src={segment.imageUrl}
                 alt="segment"
                 {...(index === 0 ? { onLoad: () => setIsLoading(false) } : {})}
               />
@@ -107,25 +162,50 @@ function App() {
     );
   }
   if (answer) {
-    console.log(`Audio length: ${answer.speechFileDurations[activeSegment]}s`);
-    return (
-      <div className="App">
-        <div className={styles.container}>
-          <div className={styles.segment}>
-            <p className={styles.text}>{answer.segments[activeSegment]}</p>
-            <img
-              key={answer.imageUrls[activeSegment]}
-              src={answer.imageUrls[activeSegment]}
-              alt="segment"
-              className={styles.image}
-              style={{
-                animationDuration: `${answer.speechFileDurations[activeSegment]}s`,
+    if (isUsingCanvasRenderer) {
+      return (
+        <div className="App">
+          <CanvasRenderer answer={answer} />
+        </div>
+      );
+    } else {
+      return (
+        <div className="App">
+          <div className={styles.container}>
+            <HtmlRenderer segment={answer.segments[activeSegment]} />
+          </div>
+          {hasFinished ? (
+            <div className={styles.buttonWrapper}>
+              <button
+                onClick={() => {
+                  externalActiveSegment = 0;
+                  setHasFinished(false);
+                  setActiveSegment(0);
+                  startNewSegment();
+                }}
+              >
+                Replay
+              </button>
+            </div>
+          ) : (
+            <div className={styles.buttonWrapper}></div>
+          )}
+          <div className={styles.buttonWrapper}>
+            <button
+              onClick={() => {
+                externalActiveSegment = 0;
+                setHasFinished(false);
+                setActiveSegment(0);
+                setAnswer(undefined);
+                setIsLoading(false);
               }}
-            />
+            >
+              Restart
+            </button>
           </div>
         </div>
-      </div>
-    );
+      );
+    }
   }
 }
 
