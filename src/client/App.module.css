@@ -6,19 +6,36 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background-color: #000;
+  background-color: #fff;
   border-radius: 10px;
+  position: relative;
+}
+
+.inputContainer {
+  color: #333;
+  font-size: 1.2rem;
+  margin-bottom: 24px;
 }
 
 .questionInput {
+  margin-top: 4px;
   text-align: center;
-  font-size: 1.2em;
+  font-size: 1.2rem;
   width: 300px;
   padding: 4px;
+  background-color: #eee;
+  color: #000;
 }
 
 .getAnswerButton {
   margin-top: 16px;
+}
+
+.buttonOverlay {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  z-index: 100;
 }
 
 .buttonWrapper {
@@ -26,4 +43,12 @@
   display: flex;
   justify-content: center;
   align-items: flex-end;
+}
+
+.error {
+  color: rgb(212, 0, 0);
+}
+
+.errorBlock {
+  margin-bottom: 16px;
 }

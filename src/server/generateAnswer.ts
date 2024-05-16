@@ -18,7 +18,9 @@ async function downloadImage(url: string, filepath: string) {
       res = await fetch(url);
       break;
     } catch (error) {
-      console.error("Error downloading image, retrying. Error was ", error);
+      console.error(
+        `Error downloading image from ${url}, retrying. Error was ${error}`
+      );
       await sleep(1000);
     }
   }
@@ -36,12 +38,45 @@ async function generateAnswer(
   question: string,
   saveImagesLocally: boolean
 ): Promise<Answer | ErrorResponse> {
+  // Get a search term for a wiki lookup for the question
+
+  const searchTermMessage = `### Write a search term for a Wikipedia search that will be used to find an article to answer the user provided question.
+  #### Format: Use the following json format as answer: {"search_term": string}.
+  ### Question: ${question}`;
+
+  let searchTerm = question;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const sarchTermCompletion = await groq.chat.completions.create({
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: searchTermMessage,
+          },
+        ],
+        model: "llama3-70b-8192",
+      });
+
+      const searchTermResult = sarchTermCompletion.choices[0].message.content;
+      const searchTermResultJson = JSON.parse(searchTermResult || "{}");
+      searchTerm = searchTermResultJson.search_term;
+    } catch (error) {
+      console.error(
+        `Error fetching search term from Groq, Retry ${i + 1} of 3`,
+        error
+      );
+    }
+  }
+
+  console.log(`Using the search term "${searchTerm}".`);
+
   // Search for the article on Wikipedia
   const wikiBaseUrl = `https://en.wikipedia.org/w/api.php`;
   const params = {
     action: "query",
     generator: "search",
-    gsrsearch: question,
+    gsrsearch: searchTerm,
     prop: "pageprops|info",
     gsrlimit: "3",
     gsrnamespace: "0",
@@ -87,41 +122,52 @@ async function generateAnswer(
     return { errorMessage: "Failed to fetch article from Wikipedia" };
   }
   const articleData = await response.json();
-  console.log(articleData);
   const articleText = articleData.parse.text["*"];
   const images: string[] = articleText.match(/<img[^>]+>/g);
-  const imageAltTexts: string[] = images.map((image: string) => {
-    const altText = image.match(/alt="([^"]+)"/);
-    return (altText && altText[1]) || "";
-  });
   const imageBaseUrl = `https://en.wikipedia.org/w/index.php?title=Special:Redirect/file/File:`;
-  const imageUrls: string[] = images
-    .map((image: string) => {
-      const imageUrl = image.match(/src="([^"]+)"/);
-      const url = (imageUrl && imageUrl[1]) || "";
-      console.log(url);
-      return url;
-    })
-    .map((imageUrl) => {
-      // Base url: https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Donald_Trump_official_portrait_%28cropped%29.jpg/113px-Donald_Trump_official_portrait_%28cropped%29.jpg
-      // Target url: https://en.wikipedia.org/wiki/Donald_Trump#/media/File:Donald_Trump_official_portrait_(cropped).jpg
-      const fileName = imageUrl.split("/").pop();
-      let cleanedFileName = fileName;
-      if (cleanedFileName?.indexOf("px-") !== -1) {
-        cleanedFileName = cleanedFileName!.split("px-")[1];
-      }
-      cleanedFileName = cleanedFileName?.replace("svg.png", "svg");
+  const imageAltTexts: string[] = [];
+  const imageUrls: string[] = [];
+  const imageMap: Record<string, string> = {};
 
-      return `${imageBaseUrl}${cleanedFileName}`;
-    });
-  const imageMap = imageAltTexts.reduce((acc, altText, index) => {
-    if (!altText || `${altText}` === "null" || `${altText}` === "undefined") {
-      return acc;
+  console.log(`Found images: ${JSON.stringify(images)}`);
+
+  images.forEach((image: string) => {
+    const altTextMatches = image.match(/alt="([^"]+)"/);
+    let altText = (altTextMatches && altTextMatches[1]) || "";
+
+    const imageUrlMatches = image.match(/src="([^"]+)"/);
+    const imageUrl = (imageUrlMatches && imageUrlMatches[1]) || "";
+    if (imageUrl.includes(".svg")) {
+      return;
     }
-    acc[altText] = imageUrls[index];
-    return acc;
-  }, {} as Record<string, string>);
-  console.log(imageMap);
+
+    // Base url: https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Donald_Trump_official_portrait_%28cropped%29.jpg/113px-Donald_Trump_official_portrait_%28cropped%29.jpg
+    // Target url: https://en.wikipedia.org/wiki/Donald_Trump#/media/File:Donald_Trump_official_portrait_(cropped).jpg
+    const fileName = imageUrl.split("/").pop();
+    let cleanedFileName = fileName;
+    if (cleanedFileName?.indexOf("px-") !== -1) {
+      cleanedFileName = cleanedFileName!.split("px-")[1];
+    }
+
+    const cleanedImageUrl = `${imageBaseUrl}${cleanedFileName}`;
+    if (!altText || `${altText}` === "null" || `${altText}` === "undefined") {
+      altText = cleanedImageUrl.split("File:")[1];
+    }
+
+    imageAltTexts.push(altText);
+    imageUrls.push(cleanedImageUrl);
+    imageMap[altText] = cleanedImageUrl;
+  });
+
+  if (Object.keys(imageMap).length === 0) {
+    console.error(`No selectable images found.`);
+    return { errorMessage: "Found no images for the article" };
+  }
+
+  const imageSelectionText = Object.keys(imageMap)
+    .map((imageAlt, index) => `${index}: "${imageAlt}"`)
+    .join(", ");
+  console.log(`Using image selection text: ${imageSelectionText}`);
 
   const plainText = html2plaintext(articleText);
   // Limit the number of characters to 8000
@@ -129,27 +175,48 @@ async function generateAnswer(
 
   const message = `### Answer the following question based on a wikipedia article with three sentences with corresponding images. A list of image alt texts is provided to select from. Try to start with an overview and end on something recent.
   #### Format: Use the following json format: {"segments": [{"text": string, "image": number}, {"text": string, "image": number}, {"text": string, "image": number}]}.
-  ### Images: ${Object.keys(imageMap)
-    .map((imageAlt, index) => `${index}: "${imageAlt}"`)
-    .join(", ")}
+  ### Images: ${imageSelectionText}
   ### Article: ${articleTextLimit}
   ### Question: ${question}`;
 
-  const completion = await groq.chat.completions.create({
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content: message,
-      },
-    ],
-    model: "llama3-70b-8192",
-  });
+  let segments: { text: string; image: number }[] = [];
+  for (let i = 0; i < 3; i++) {
+    try {
+      const completion = await groq.chat.completions.create({
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: message,
+          },
+        ],
+        model: "llama3-70b-8192",
+      });
 
-  const result = completion.choices[0].message.content;
-  const resultJson = JSON.parse(result || "{}");
-  const segments: { text: string; image: number }[] = resultJson.segments;
+      const result = completion.choices[0].message.content;
+      const resultJson = JSON.parse(result || "{}");
+      segments = resultJson.segments;
+    } catch (error) {
+      console.error(`Error fetching segments from Groq, Retry ${i + 1} of 3`);
+      console.error(error);
+    }
+  }
 
+  if (!segments || segments.length !== 3) {
+    return { errorMessage: "Failed to generate answer" };
+  }
+
+  if (
+    segments.some(
+      (segment) => segment.image < 0 || segment.image >= images.length
+    )
+  ) {
+    console.error(
+      `Invalid image index in segments: ${JSON.stringify(segments)}`
+    );
+    console.error(`Images: ${imageSelectionText}`);
+    return { errorMessage: "Invalid image index" };
+  }
   const selectedImageUrls = segments.map((segment) => {
     return imageUrls[segment.image] || "";
   });

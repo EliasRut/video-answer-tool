@@ -1,9 +1,22 @@
-.segment {
+.container {
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+.segment {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
   overflow: hidden;
   border-radius: 10px;
+  animation: fade 0.5s linear forwards;
+}
+
+.segment.last {
+  animation: fade-last 0.5s linear forwards;
 }
 
 .text {
@@ -22,12 +35,33 @@
 }
 
 .image {
+  position: relative;
   width: 100%;
   height: 100%;
   object-fit: cover;
   border-radius: 10px;
-  animation: zoomIn 0.5s ease;
+  animation: zoomIn 0.5s linear forwards;
   z-index: 1;
+}
+
+@keyframes fade {
+  0% {
+    opacity: 1;
+  }
+  98% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fade-last {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 /* Zoom-In Animation */
