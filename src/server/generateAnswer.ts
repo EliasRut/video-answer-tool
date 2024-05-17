@@ -78,7 +78,7 @@ async function generateAnswer(
     generator: "search",
     gsrsearch: searchTerm,
     prop: "pageprops|info",
-    gsrlimit: "3",
+    gsrlimit: "1",
     gsrnamespace: "0",
     ppprop: "disambiguation",
     inprop: "url",
@@ -196,6 +196,7 @@ async function generateAnswer(
       const result = completion.choices[0].message.content;
       const resultJson = JSON.parse(result || "{}");
       segments = resultJson.segments;
+      break;
     } catch (error) {
       console.error(`Error fetching segments from Groq, Retry ${i + 1} of 3`);
       console.error(error);
